@@ -1,0 +1,62 @@
+name: Release
+on: push
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        target: i686-pc-windows-msvc
+        toolchain: stable
+
+    - name: test
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --release --target i686-pc-windows-msvc
+
+    - name: build
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release --target i686-pc-windows-msvc
+
+    - name: zip
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        cd target/i686-pc-windows-msvc/release
+        Compress-Archive -LiteralPath underrail-fixer.exe,underrail_fix.dll -DestinationPath underrail-fix.zip
+
+    - uses: actions/create-release@v1
+      id: create_release
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+
+    - uses: actions/upload-release-asset@v1
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: target/i686-pc-windows-msvc/release/underrail-fix.zip
+        asset_name: underrail-fix.zip
+        asset_content_type: application/zip
